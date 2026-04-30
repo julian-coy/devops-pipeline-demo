@@ -11,3 +11,6 @@
 *.pem
 *.key
 .env
+
+# Local
+VIDEO_SCRIPT.md
