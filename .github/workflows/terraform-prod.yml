@@ -1,0 +1,124 @@
+name: "Terraform PROD Pipeline"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/environments/prod/**'
+      - 'terraform/modules/**'
+      - 'app/**'
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.7.0"
+  AWS_REGION: "us-east-1"
+  WORKING_DIR: "./terraform/environments/prod"
+
+jobs:
+  # ── JOB 1: Validación (sin credenciales de deploy) ──────────────
+  validate:
+    name: "Validate & Plan PROD"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # a. terraform init
+      - name: "a. terraform init"
+        run: terraform init
+
+      # b. terraform fmt --check
+      - name: "b. terraform fmt --check"
+        run: terraform fmt -check -recursive
+
+      # c. terraform validate
+      - name: "c. terraform validate"
+        run: terraform validate
+
+      # d. tfsec (estricto en PROD — bloquea si hay problemas)
+      - name: "d. tfsec security scan (PROD strict)"
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ${{ env.WORKING_DIR }}
+          soft_fail: false
+
+      # e. terraform plan — guardado como artefacto para el deploy
+      - name: "e. terraform plan"
+        run: terraform plan -out=tfplan -no-color
+
+      - name: Subir plan como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-prod
+          path: ${{ env.WORKING_DIR }}/tfplan
+          retention-days: 1
+
+  # ── JOB 2: Deploy con aprobación manual ─────────────────────────
+  deploy-prod:
+    name: "Deploy to PROD"
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: prod   # ← aprobación manual configurada en GitHub
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "a. terraform init"
+        run: terraform init
+
+      - name: Descargar plan aprobado
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-prod
+          path: ${{ env.WORKING_DIR }}
+
+      # f. terraform apply con el plan ya aprobado
+      - name: "f. terraform apply"
+        run: terraform apply -auto-approve tfplan
+
+      # g. Notificación con resultado
+      - name: "g. Notificación de deploy PROD"
+        if: always()
+        run: |
+          URL=$(terraform output -raw web_url 2>/dev/null || echo "N/A")
+          STATUS="${{ job.status }}"
+          echo "## Deploy PROD — $STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Aprobado por:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** $URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
