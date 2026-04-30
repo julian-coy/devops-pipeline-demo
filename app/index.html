@@ -25,9 +25,10 @@
       margin-bottom: 1.5rem;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      background: #1a9e75;
       color: #fff;
     }
+    .badge.dev  { background: #1a9e75; }
+    .badge.prod { background: #ba7517; }
     h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; }
     p  { color: #8b949e; margin-bottom: 0.3rem; }
     .stack {
@@ -49,7 +50,7 @@
 </head>
 <body>
   <div class="container">
-    <span class="badge">DEV</span>
+    <span class="badge ${environment}">${upper(environment)}</span>
     <h1>DevOps Pipeline Demo</h1>
     <p>Desplegado con GitHub Actions + Terraform</p>
     <p>Infraestructura en AWS — EC2 t2.micro + Nginx</p>

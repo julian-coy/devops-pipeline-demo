@@ -48,5 +48,5 @@ module "ec2" {
   instance_type     = var.instance_type
   subnet_id         = module.vpc.subnet_id
   security_group_id = module.security_group.security_group_id
-  app_content       = file("${path.root}/../../../app/index.html")
+  app_content       = templatefile("${path.root}/../../../app/index.html", { environment = "prod" })
 }
