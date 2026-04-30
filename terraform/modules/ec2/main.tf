@@ -48,7 +48,8 @@ resource "aws_instance" "web" {
   subnet_id               = var.subnet_id
   vpc_security_group_ids  = [var.security_group_id]
   iam_instance_profile    = aws_iam_instance_profile.ec2_profile.name
-  disable_api_termination = var.environment == "prod" ? true : false
+  disable_api_termination      = var.environment == "prod" ? true : false
+  user_data_replace_on_change  = true
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     environment  = var.environment
