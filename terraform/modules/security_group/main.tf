@@ -20,7 +20,7 @@ resource "aws_security_group" "web" {
   }
 
   egress {
-    description = "Todo el tráfico saliente"
+    description = "All outbound traffic allowed"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
