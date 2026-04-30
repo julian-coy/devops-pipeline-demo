@@ -1,0 +1,16 @@
+# Terraform
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!terraform.tfvars.example
+
+# Credenciales — NUNCA en el repo
+*.pem
+*.key
+.env
+
+# Local
+VIDEO_SCRIPT.md

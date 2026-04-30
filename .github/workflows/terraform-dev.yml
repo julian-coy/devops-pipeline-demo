@@ -1,0 +1,82 @@
+name: "Terraform DEV Pipeline"
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'terraform/environments/dev/**'
+      - 'terraform/modules/**'
+      - 'app/**'
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.7.0"
+  AWS_REGION: "us-east-1"
+  WORKING_DIR: "./terraform/environments/dev"
+
+jobs:
+  deploy-dev:
+    name: "Deploy to DEV"
+    runs-on: ubuntu-latest
+    environment: dev
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      # a. terraform init
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "a. terraform init"
+        run: terraform init
+
+      # b. terraform fmt --check
+      - name: "b. terraform fmt --check"
+        run: terraform fmt -check -recursive
+
+      # c. terraform validate
+      - name: "c. terraform validate"
+        run: terraform validate
+
+      # d. tfsec (soft_fail en DEV — advierte pero no bloquea)
+      - name: "d. tfsec security scan"
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ${{ env.WORKING_DIR }}
+          soft_fail: true
+
+      # e. terraform plan
+      - name: "e. terraform plan"
+        id: plan
+        run: terraform plan -out=tfplan -no-color
+
+      # f. terraform apply (automático en DEV)
+      - name: "f. terraform apply"
+        run: terraform apply -auto-approve tfplan
+
+      # g. Notificación con resultado
+      - name: "g. Notificación de deploy"
+        if: always()
+        run: |
+          URL=$(terraform output -raw web_url 2>/dev/null || echo "N/A")
+          STATUS="${{ job.status }}"
+          echo "## Deploy DEV — $STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** $URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
