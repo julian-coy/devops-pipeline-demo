@@ -1,6 +1,13 @@
 name: "Terraform PROD Pipeline"
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/environments/prod/**'
+      - 'terraform/modules/**'
+      - 'app/**'
   push:
     branches:
       - main
